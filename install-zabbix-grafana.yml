@@ -1,7 +1,10 @@
 ---
-- name: Install Zabbix + Grafana (Clean Production Style)
+- name: Install Zabbix + Grafana (OLAM Clean Version)
   hosts: all
   become: yes
+
+  collections:
+    - community.mysql
 
   vars:
     zabbix_db: zabbix
@@ -11,7 +14,7 @@
   tasks:
 
   # =========================
-  # BASE PACKAGES
+  # BASE SYSTEM
   # =========================
   - name: Update apt cache
     apt:
@@ -37,19 +40,21 @@
         - snmpd
       state: present
 
-  - name: Start MySQL
+  - name: Ensure MySQL is started
     systemd:
       name: mysql
       state: started
       enabled: yes
 
   # =========================
-  # MYSQL CONFIG
+  # MYSQL CONFIG (NO SHELL)
   # =========================
   - name: Create Zabbix database
     mysql_db:
       name: "{{ zabbix_db }}"
       state: present
+      encoding: utf8mb4
+      collation: utf8mb4_bin
 
   - name: Create Zabbix user
     mysql_user:
@@ -60,7 +65,7 @@
       state: present
 
   # =========================
-  # ZABBIX REPOSITORY
+  # ZABBIX REPO
   # =========================
   - name: Download Zabbix repo package
     get_url:
@@ -88,13 +93,11 @@
         - zabbix-agent
       state: present
 
-  - name: Import Zabbix schema (run once safe)
-    shell: |
-      if ! mysql -u{{ zabbix_user }} -p{{ zabbix_password }} -e "use {{ zabbix_db }}" 2>/dev/null; then
-        zcat /usr/share/zabbix-sql-scripts/mysql/server.sql.gz | mysql -u{{ zabbix_user }} -p{{ zabbix_password }} {{ zabbix_db }}
-      fi
-    args:
-      executable: /bin/bash
+  - name: Import Zabbix schema (idempotent safe)
+    mysql_db:
+      name: "{{ zabbix_db }}"
+      state: import
+      target: /usr/share/zabbix-sql-scripts/mysql/server.sql.gz
 
   - name: Configure Zabbix DB password
     lineinfile:
@@ -103,7 +106,7 @@
       line: "DBPassword={{ zabbix_password }}"
 
   # =========================
-  # GRAFANA REPOSITORY (CLEAN)
+  # GRAFANA
   # =========================
   - name: Add Grafana repository key
     apt_key:
@@ -138,9 +141,3 @@
       - zabbix-server
       - zabbix-agent
       - grafana-server
-
-  handlers:
-    - name: restart zabbix
-      systemd:
-        name: zabbix-server
-        state: restarted
