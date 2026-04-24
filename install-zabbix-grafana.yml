@@ -1,5 +1,5 @@
 ---
-- name: Install Zabbix + Grafana (OLAM Stable Shell Only)
+- name: Zabbix + Grafana FULL STACK (OLAM Safe Shell Only)
   hosts: all
   become: yes
 
@@ -35,6 +35,7 @@
         - php-json
         - snmp
         - snmpd
+        - unzip
       state: present
 
   - name: Ensure MySQL started
@@ -61,18 +62,18 @@
   # =========================
   # FIX MYSQL 1419 (IMPORTANT)
   # =========================
-  - name: Persist MySQL binlog setting (fix Zabbix schema error 1419)
+  - name: Enable binlog function creators (persistent fix)
     lineinfile:
       path: /etc/mysql/mysql.conf.d/mysqld.cnf
       insertafter: "[mysqld]"
       line: "log_bin_trust_function_creators = 1"
 
-  - name: Restart MySQL after config change
+  - name: Restart MySQL
     systemd:
       name: mysql
       state: restarted
 
-  - name: Wait for MySQL ready
+  - name: Wait MySQL ready
     wait_for:
       port: 3306
       delay: 5
@@ -109,22 +110,23 @@
       state: present
 
   # =========================
-  # IMPORT SCHEMA (SAFE)
+  # SAFE SCHEMA IMPORT (IDEMPOTENT)
   # =========================
-  - name: Check schema file exists
-    stat:
-      path: /usr/share/zabbix-sql-scripts/mysql/server.sql.gz
-    register: zbx_schema
-
-  - name: Import Zabbix schema
+  - name: Check if Zabbix already initialized
     shell: |
-      zcat /usr/share/zabbix-sql-scripts/mysql/server.sql.gz | mysql --binary-mode=1 -u{{ zabbix_user }} -p{{ zabbix_password }} {{ zabbix_db }}
-    when: zbx_schema.stat.exists
+      mysql -uzabbix -p{{ zabbix_password }} -e "USE zabbix; SHOW TABLES LIKE 'users';"
+    register: zbx_init
+    ignore_errors: yes
+
+  - name: Import Zabbix schema (only first run)
+    shell: |
+      zcat /usr/share/zabbix-sql-scripts/mysql/server.sql.gz | mysql --binary-mode=1 -uzabbix -p{{ zabbix_password }} zabbix
+    when: zbx_init.rc != 0
 
   # =========================
-  # CONFIG ZABBIX SERVER
+  # ZABBIX CONFIG
   # =========================
-  - name: Configure Zabbix DB settings
+  - name: Configure Zabbix DB connection
     shell: |
       sed -i 's/^# DBHost=.*/DBHost=localhost/' /etc/zabbix/zabbix_server.conf
       sed -i 's/^# DBName=.*/DBName={{ zabbix_db }}/' /etc/zabbix/zabbix_server.conf
@@ -132,7 +134,28 @@
       sed -i 's/^# DBPassword=.*/DBPassword={{ zabbix_password }}/' /etc/zabbix/zabbix_server.conf
 
   # =========================
-  # GRAFANA
+  # START ZABBIX SERVICES
+  # =========================
+  - name: Restart Zabbix server
+    systemd:
+      name: zabbix-server
+      state: restarted
+      enabled: yes
+
+  - name: Restart Zabbix agent
+    systemd:
+      name: zabbix-agent
+      state: restarted
+      enabled: yes
+
+  - name: Restart Apache
+    systemd:
+      name: apache2
+      state: restarted
+      enabled: yes
+
+  # =========================
+  # GRAFANA INSTALL
   # =========================
   - name: Add Grafana repo key
     get_url:
@@ -152,17 +175,18 @@
       name: grafana
       state: present
 
-  # =========================
-  # SERVICES
-  # =========================
-  - name: Enable and start services
+  - name: Start Grafana
     systemd:
-      name: "{{ item }}"
+      name: grafana-server
       state: started
       enabled: yes
-    loop:
-      - mysql
-      - apache2
-      - zabbix-server
-      - zabbix-agent
-      - grafana-server
+
+  # =========================
+  # FINAL CHECK
+  # =========================
+  - name: Check Zabbix service
+    shell: systemctl is-active zabbix-server
+    register: zbx_status
+
+  - debug:
+      var: zbx_status.stdout
