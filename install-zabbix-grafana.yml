@@ -1,8 +1,7 @@
 ---
-- name: Install Zabbix + Grafana (Self-healing OLAM version)
+- name: Install Zabbix + Grafana (Shell Only - OLAM Safe)
   hosts: all
   become: yes
-  gather_facts: yes
 
   vars:
     zabbix_db: zabbix
@@ -12,16 +11,7 @@
   tasks:
 
   # =========================
-  # CHECK & INSTALL COLLECTION
-  # =========================
-  - name: ensure collection exists
-    command: ansible-galaxy collection install community.mysql
-    delegate_to: localhost
-    run_once: true
-    ignore_errors: yes
-
-  # =========================
-  # BASE PACKAGES
+  # BASE SYSTEM
   # =========================
   - name: Update apt cache
     apt:
@@ -47,29 +37,26 @@
         - snmpd
       state: present
 
-  - name: Ensure MySQL is running
+  - name: Ensure MySQL started
     systemd:
       name: mysql
       state: started
       enabled: yes
 
   # =========================
-  # MYSQL SETUP (requires community.mysql)
+  # MYSQL (SHELL ONLY)
   # =========================
   - name: Create Zabbix database
-    community.mysql.mysql_db:
-      name: "{{ zabbix_db }}"
-      state: present
-      encoding: utf8mb4
-      collation: utf8mb4_bin
+    shell: |
+      mysql -e "CREATE DATABASE IF NOT EXISTS {{ zabbix_db }} CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;"
 
   - name: Create Zabbix user
-    community.mysql.mysql_user:
-      name: "{{ zabbix_user }}"
-      password: "{{ zabbix_password }}"
-      priv: "{{ zabbix_db }}.*:ALL"
-      host: localhost
-      state: present
+    shell: |
+      mysql -e "CREATE USER IF NOT EXISTS '{{ zabbix_user }}'@'localhost' IDENTIFIED BY '{{ zabbix_password }}';"
+
+  - name: Grant privileges
+    shell: |
+      mysql -e "GRANT ALL PRIVILEGES ON {{ zabbix_db }}.* TO '{{ zabbix_user }}'@'localhost'; FLUSH PRIVILEGES;"
 
   # =========================
   # ZABBIX REPO
@@ -83,7 +70,7 @@
     apt:
       deb: /tmp/zabbix-release.deb
 
-  - name: Update apt cache after repo
+  - name: Update apt cache
     apt:
       update_cache: yes
 
@@ -101,31 +88,25 @@
       state: present
 
   - name: Import Zabbix schema
-    community.mysql.mysql_db:
-      name: "{{ zabbix_db }}"
-      state: import
-      target: /usr/share/zabbix-sql-scripts/mysql/server.sql.gz
+    shell: |
+      zcat /usr/share/zabbix-sql-scripts/mysql/server.sql.gz | mysql -u{{ zabbix_user }} -p{{ zabbix_password }} {{ zabbix_db }}
 
   - name: Configure DB password
-    lineinfile:
-      path: /etc/zabbix/zabbix_server.conf
-      regexp: '^DBPassword='
-      line: "DBPassword={{ zabbix_password }}"
+    shell: |
+      sed -i 's/^# DBPassword=.*/DBPassword={{ zabbix_password }}/' /etc/zabbix/zabbix_server.conf
 
   # =========================
   # GRAFANA
   # =========================
   - name: Add Grafana key
-    apt_key:
-      url: https://apt.grafana.com/gpg.key
-      state: present
+    shell: |
+      wget -q -O - https://apt.grafana.com/gpg.key | apt-key add -
 
   - name: Add Grafana repo
-    apt_repository:
-      repo: "deb https://apt.grafana.com stable main"
-      state: present
+    shell: |
+      echo "deb https://apt.grafana.com stable main" > /etc/apt/sources.list.d/grafana.list
 
-  - name: Update apt cache for Grafana
+  - name: Update apt cache (grafana)
     apt:
       update_cache: yes
 
