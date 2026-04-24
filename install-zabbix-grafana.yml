@@ -114,10 +114,16 @@
       path: /var/lib/zabbix/.db_initialized
     register: zbx_init
 
-  - name: Import Zabbix schema (FIRST TIME ONLY)
+  - name: Check if Zabbix schema already exists
+    shell: |
+      mysql -uzabbix -p{{ zabbix_password }} -e "USE zabbix; SHOW TABLES LIKE 'users';"
+    register: zbx_check
+    ignore_errors: yes
+  
+  - name: Import Zabbix schema (ONLY IF EMPTY DB)
     shell: |
       zcat /usr/share/zabbix-sql-scripts/mysql/server.sql.gz | mysql -uzabbix -p{{ zabbix_password }} zabbix
-    when: not zbx_init.stat.exists
+    when: zbx_check.rc != 0
 
   - name: Create init marker
     file:
