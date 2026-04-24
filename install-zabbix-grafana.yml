@@ -50,13 +50,13 @@
     shell: |
       mysql -e "CREATE DATABASE IF NOT EXISTS {{ zabbix_db }} CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;"
 
-  - name: Create Zabbix user
+  - name: Create Zabbix user (safe)
     shell: |
-      mysql -e "CREATE USER IF NOT EXISTS '{{ zabbix_user }}'@'localhost' IDENTIFIED BY '{{ zabbix_password }}';"
+      mysql -e "CREATE USER IF NOT EXISTS 'zabbix'@'localhost' IDENTIFIED BY '{{ zabbix_password }}';"
 
   - name: Grant privileges
     shell: |
-      mysql -e "GRANT ALL PRIVILEGES ON {{ zabbix_db }}.* TO '{{ zabbix_user }}'@'localhost'; FLUSH PRIVILEGES;"
+      mysql -e "GRANT ALL PRIVILEGES ON zabbix.* TO 'zabbix'@'localhost'; FLUSH PRIVILEGES;"
 
   # =========================
   # ZABBIX REPO
