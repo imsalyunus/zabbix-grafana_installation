@@ -126,12 +126,17 @@
   # =========================
   # ZABBIX CONFIG
   # =========================
-  - name: Configure Zabbix DB connection
+  - name: Force clean Zabbix config DB
     shell: |
-      sed -i 's/^# DBHost=.*/DBHost=localhost/' /etc/zabbix/zabbix_server.conf
-      sed -i 's/^# DBName=.*/DBName={{ zabbix_db }}/' /etc/zabbix/zabbix_server.conf
-      sed -i 's/^# DBUser=.*/DBUser={{ zabbix_user }}/' /etc/zabbix/zabbix_server.conf
-      sed -i 's/^# DBPassword=.*/DBPassword={{ zabbix_password }}/' /etc/zabbix/zabbix_server.conf
+      sed -i '/DBHost/d' /etc/zabbix/zabbix_server.conf
+      sed -i '/DBName/d' /etc/zabbix/zabbix_server.conf
+      sed -i '/DBUser/d' /etc/zabbix/zabbix_server.conf
+      sed -i '/DBPassword/d' /etc/zabbix/zabbix_server.conf
+  
+      echo "DBHost=localhost" >> /etc/zabbix/zabbix_server.conf
+      echo "DBName=zabbix" >> /etc/zabbix/zabbix_server.conf
+      echo "DBUser=zabbix" >> /etc/zabbix/zabbix_server.conf
+      echo "DBPassword=zabbixpass123" >> /etc/zabbix/zabbix_server.conf
 
   # =========================
   # START ZABBIX SERVICES
