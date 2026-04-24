@@ -1,10 +1,8 @@
 ---
-- name: Install Zabbix + Grafana (OLAM Clean Version)
+- name: Install Zabbix + Grafana (Self-healing OLAM version)
   hosts: all
   become: yes
-
-  collections:
-    - community.mysql
+  gather_facts: yes
 
   vars:
     zabbix_db: zabbix
@@ -14,7 +12,16 @@
   tasks:
 
   # =========================
-  # BASE SYSTEM
+  # CHECK & INSTALL COLLECTION
+  # =========================
+  - name: ensure collection exists
+    command: ansible-galaxy collection install community.mysql
+    delegate_to: localhost
+    run_once: true
+    ignore_errors: yes
+
+  # =========================
+  # BASE PACKAGES
   # =========================
   - name: Update apt cache
     apt:
@@ -40,24 +47,24 @@
         - snmpd
       state: present
 
-  - name: Ensure MySQL is started
+  - name: Ensure MySQL is running
     systemd:
       name: mysql
       state: started
       enabled: yes
 
   # =========================
-  # MYSQL CONFIG (NO SHELL)
+  # MYSQL SETUP (requires community.mysql)
   # =========================
   - name: Create Zabbix database
-    mysql_db:
+    community.mysql.mysql_db:
       name: "{{ zabbix_db }}"
       state: present
       encoding: utf8mb4
       collation: utf8mb4_bin
 
   - name: Create Zabbix user
-    mysql_user:
+    community.mysql.mysql_user:
       name: "{{ zabbix_user }}"
       password: "{{ zabbix_password }}"
       priv: "{{ zabbix_db }}.*:ALL"
@@ -67,7 +74,7 @@
   # =========================
   # ZABBIX REPO
   # =========================
-  - name: Download Zabbix repo package
+  - name: Download Zabbix repo
     get_url:
       url: https://repo.zabbix.com/zabbix/7.0/ubuntu/pool/main/z/zabbix-release/zabbix-release_latest+ubuntu20.04_all.deb
       dest: /tmp/zabbix-release.deb
@@ -76,7 +83,7 @@
     apt:
       deb: /tmp/zabbix-release.deb
 
-  - name: Update apt cache after Zabbix repo
+  - name: Update apt cache after repo
     apt:
       update_cache: yes
 
@@ -93,13 +100,13 @@
         - zabbix-agent
       state: present
 
-  - name: Import Zabbix schema (idempotent safe)
-    mysql_db:
+  - name: Import Zabbix schema
+    community.mysql.mysql_db:
       name: "{{ zabbix_db }}"
       state: import
       target: /usr/share/zabbix-sql-scripts/mysql/server.sql.gz
 
-  - name: Configure Zabbix DB password
+  - name: Configure DB password
     lineinfile:
       path: /etc/zabbix/zabbix_server.conf
       regexp: '^DBPassword='
@@ -108,12 +115,12 @@
   # =========================
   # GRAFANA
   # =========================
-  - name: Add Grafana repository key
+  - name: Add Grafana key
     apt_key:
       url: https://apt.grafana.com/gpg.key
       state: present
 
-  - name: Add Grafana repository
+  - name: Add Grafana repo
     apt_repository:
       repo: "deb https://apt.grafana.com stable main"
       state: present
