@@ -1,6 +1,6 @@
 ---
 - name: Install Zabbix + Grafana on Ubuntu 22.04
-  hosts: zabbix_server
+  hosts: all
   become: yes
 
   tasks:
