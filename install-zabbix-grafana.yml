@@ -1,5 +1,5 @@
 ---
-- name: Install Zabbix + Grafana (Shell Only - OLAM Safe)
+- name: Install Zabbix + Grafana (Shell Only - Stable Version)
   hosts: all
   become: yes
 
@@ -44,19 +44,19 @@
       enabled: yes
 
   # =========================
-  # MYSQL (SHELL ONLY)
+  # MYSQL (SHELL ONLY SAFE)
   # =========================
   - name: Create Zabbix database
     shell: |
       mysql -e "CREATE DATABASE IF NOT EXISTS {{ zabbix_db }} CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;"
 
-  - name: Create Zabbix user (safe)
+  - name: Create Zabbix user
     shell: |
-      mysql -e "CREATE USER IF NOT EXISTS 'zabbix'@'localhost' IDENTIFIED BY '{{ zabbix_password }}';"
+      mysql -e "CREATE USER IF NOT EXISTS '{{ zabbix_user }}'@'localhost' IDENTIFIED BY '{{ zabbix_password }}';"
 
   - name: Grant privileges
     shell: |
-      mysql -e "GRANT ALL PRIVILEGES ON zabbix.* TO 'zabbix'@'localhost'; FLUSH PRIVILEGES;"
+      mysql -e "GRANT ALL PRIVILEGES ON {{ zabbix_db }}.* TO '{{ zabbix_user }}'@'localhost'; FLUSH PRIVILEGES;"
 
   # =========================
   # ZABBIX REPO
@@ -87,20 +87,36 @@
         - zabbix-agent
       state: present
 
+  # =========================
+  # IMPORT SCHEMA (FIXED SAFE)
+  # =========================
+  - name: Check schema file exists
+    stat:
+      path: /usr/share/zabbix-sql-scripts/mysql/server.sql.gz
+    register: zbx_schema
+
   - name: Import Zabbix schema
     shell: |
       zcat /usr/share/zabbix-sql-scripts/mysql/server.sql.gz | mysql -u{{ zabbix_user }} -p{{ zabbix_password }} {{ zabbix_db }}
+    when: zbx_schema.stat.exists
 
-  - name: Configure DB password
+  # =========================
+  # CONFIG ZABBIX
+  # =========================
+  - name: Configure DB in Zabbix config
     shell: |
+      sed -i 's/^# DBHost=.*/DBHost=localhost/' /etc/zabbix/zabbix_server.conf
+      sed -i 's/^# DBName=.*/DBName={{ zabbix_db }}/' /etc/zabbix/zabbix_server.conf
+      sed -i 's/^# DBUser=.*/DBUser={{ zabbix_user }}/' /etc/zabbix/zabbix_server.conf
       sed -i 's/^# DBPassword=.*/DBPassword={{ zabbix_password }}/' /etc/zabbix/zabbix_server.conf
 
   # =========================
-  # GRAFANA
+  # GRAFANA (FIXED NO apt-key)
   # =========================
-  - name: Add Grafana key
-    shell: |
-      wget -q -O - https://apt.grafana.com/gpg.key | apt-key add -
+  - name: Add Grafana repo key (modern way)
+    get_url:
+      url: https://apt.grafana.com/gpg.key
+      dest: /etc/apt/trusted.gpg.d/grafana.gpg
 
   - name: Add Grafana repo
     shell: |
