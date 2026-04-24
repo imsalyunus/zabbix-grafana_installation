@@ -36,6 +36,7 @@
     - name: Install Zabbix repository
       apt:
         deb: /tmp/zabbix-release.deb
+        force: yes
 
     - name: Update apt cache again
       apt:
