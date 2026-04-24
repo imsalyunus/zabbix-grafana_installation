@@ -125,11 +125,18 @@
       zcat /usr/share/zabbix-sql-scripts/mysql/server.sql.gz | mysql -uzabbix -p{{ zabbix_password }} zabbix
     when: zbx_check.rc != 0
 
+  - name: Ensure Zabbix var lib directory exists
+    file:
+      path: /var/lib/zabbix
+      state: directory
+      owner: zabbix
+      group: zabbix
+      mode: '0755'
+
   - name: Create init marker
     file:
       path: /var/lib/zabbix/.db_initialized
       state: touch
-    when: not zbx_init.stat.exists
 
   # =========================
   # ZABBIX CONFIG CLEAN
