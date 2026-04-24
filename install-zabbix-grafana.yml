@@ -1,5 +1,5 @@
 ---
-- name: Zabbix + Grafana FULL STACK (OLAM Safe Shell Only)
+- name: Zabbix + Grafana FULL STACK (OLAM Safe Final Fix)
   hosts: all
   become: yes
 
@@ -45,7 +45,7 @@
       enabled: yes
 
   # =========================
-  # MYSQL SETUP (SHELL ONLY)
+  # MYSQL SETUP
   # =========================
   - name: Create Zabbix database
     shell: |
@@ -60,9 +60,9 @@
       mysql -e "GRANT ALL PRIVILEGES ON {{ zabbix_db }}.* TO '{{ zabbix_user }}'@'localhost'; FLUSH PRIVILEGES;"
 
   # =========================
-  # FIX MYSQL 1419 (IMPORTANT)
+  # FIX MYSQL 1419
   # =========================
-  - name: Enable binlog function creators (persistent fix)
+  - name: Enable binlog function creators (persistent)
     lineinfile:
       path: /etc/mysql/mysql.conf.d/mysqld.cnf
       insertafter: "[mysqld]"
@@ -80,7 +80,7 @@
       timeout: 60
 
   # =========================
-  # ZABBIX REPO (6.0 LTS STABLE)
+  # ZABBIX REPO
   # =========================
   - name: Download Zabbix repo
     get_url:
@@ -110,36 +110,47 @@
       state: present
 
   # =========================
-  # SAFE SCHEMA IMPORT (IDEMPOTENT)
+  # FIX /run/zabbix (INI ROOT CAUSE CRASH KAMU)
   # =========================
-  - name: Check if Zabbix already initialized
+  - name: Ensure Zabbix runtime directory exists
+    file:
+      path: /run/zabbix
+      state: directory
+      owner: zabbix
+      group: zabbix
+      mode: '0755'
+
+  # =========================
+  # SCHEMA IMPORT SAFE
+  # =========================
+  - name: Check Zabbix already initialized
     shell: |
       mysql -uzabbix -p{{ zabbix_password }} -e "USE zabbix; SHOW TABLES LIKE 'users';"
     register: zbx_init
     ignore_errors: yes
 
-  - name: Import Zabbix schema (only first run)
+  - name: Import Zabbix schema (first run only)
     shell: |
       zcat /usr/share/zabbix-sql-scripts/mysql/server.sql.gz | mysql --binary-mode=1 -uzabbix -p{{ zabbix_password }} zabbix
     when: zbx_init.rc != 0
 
   # =========================
-  # ZABBIX CONFIG
+  # ZABBIX CONFIG FIX
   # =========================
-  - name: Force clean Zabbix config DB
+  - name: Configure Zabbix DB connection (clean replace)
     shell: |
       sed -i '/DBHost/d' /etc/zabbix/zabbix_server.conf
       sed -i '/DBName/d' /etc/zabbix/zabbix_server.conf
       sed -i '/DBUser/d' /etc/zabbix/zabbix_server.conf
       sed -i '/DBPassword/d' /etc/zabbix/zabbix_server.conf
-  
+
       echo "DBHost=localhost" >> /etc/zabbix/zabbix_server.conf
-      echo "DBName=zabbix" >> /etc/zabbix/zabbix_server.conf
-      echo "DBUser=zabbix" >> /etc/zabbix/zabbix_server.conf
-      echo "DBPassword=zabbixpass123" >> /etc/zabbix/zabbix_server.conf
+      echo "DBName={{ zabbix_db }}" >> /etc/zabbix/zabbix_server.conf
+      echo "DBUser={{ zabbix_user }}" >> /etc/zabbix/zabbix_server.conf
+      echo "DBPassword={{ zabbix_password }}" >> /etc/zabbix/zabbix_server.conf
 
   # =========================
-  # START ZABBIX SERVICES
+  # START SERVICES (ORDER IMPORTANT)
   # =========================
   - name: Restart Zabbix server
     systemd:
@@ -160,7 +171,7 @@
       enabled: yes
 
   # =========================
-  # GRAFANA INSTALL
+  # GRAFANA
   # =========================
   - name: Add Grafana repo key
     get_url:
@@ -189,7 +200,7 @@
   # =========================
   # FINAL CHECK
   # =========================
-  - name: Check Zabbix service
+  - name: Check Zabbix service status
     shell: systemctl is-active zabbix-server
     register: zbx_status
 
