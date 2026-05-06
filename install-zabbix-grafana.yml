@@ -1,5 +1,5 @@
 ---
-- name: Zabbix + Grafana FULL STACK (Ubuntu 22.04)
+- name: Install Zabbix + Grafana (Ubuntu 22.04)
   hosts: all
   vars:
     zabbix_db: zabbix
@@ -46,14 +46,14 @@
   # MYSQL SETUP (SAFE)
   # =========================
   - name: Create Zabbix database
-    community.mysql.mysql_db:
+    ansible.mysql.mysql_db:
       name: "{{ zabbix_db }}"
       encoding: utf8mb4
       collation: utf8mb4_bin
       state: present
 
   - name: Create Zabbix user
-    community.mysql.mysql_user:
+    ansible.mysql.mysql_user:
       name: "{{ zabbix_user }}"
       password: "{{ zabbix_password }}"
       priv: "{{ zabbix_db }}.*:ALL"
@@ -111,7 +111,7 @@
   # SAFE SCHEMA INIT
   # =========================
   - name: Check if Zabbix schema already exists
-    community.mysql.mysql_query:
+    ansible.mysql.mysql_query:
       login_user: "{{ zabbix_user }}"
       login_password: "{{ zabbix_password }}"
       query: "SHOW TABLES LIKE 'users';"
