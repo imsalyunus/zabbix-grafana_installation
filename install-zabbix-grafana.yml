@@ -62,6 +62,14 @@
       state: present
       login_unix_socket: /var/run/mysqld/mysqld.sock
 
+  - name: Ensure Zabbix user full privilege
+    ansible.mysql.mysql_user:
+      name: "{{ zabbix_user }}"
+      priv: "*.*:ALL,GRANT"
+      host: localhost
+      state: present
+      login_unix_socket: /var/run/mysqld/mysqld.sock
+
   - name: Enable function creators (fix 1419 error)
     lineinfile:
       path: /etc/mysql/mysql.conf.d/mysqld.cnf
@@ -109,6 +117,16 @@
         - zabbix-agent
       state: present
 
+  - name: Wait for MySQL to be ready
+    wait_for:
+      port: 3306
+      delay: 5
+      timeout: 60
+
+  - name: Test MySQL connection
+    ansible.mysql.mysql_info:
+      login_unix_socket: /var/run/mysqld/mysqld.sock
+
   # =========================
   # SAFE SCHEMA INIT
   # =========================
@@ -119,10 +137,13 @@
       login_unix_socket: /var/run/mysqld/mysqld.sock
       query: "SHOW TABLES LIKE 'users';"
       db: "{{ zabbix_db }}"
+    register: zbx_check
+    ignore_errors: yes
 
   - name: Import Zabbix schema (ONLY IF EMPTY DB)
     shell: |
-      zcat /usr/share/zabbix-sql-scripts/mysql/server.sql.gz | mysql -u{{ zabbix_user }} -p{{ zabbix_password }} {{ zabbix_db }}
+      zcat /usr/share/zabbix-sql-scripts/mysql/server.sql.gz | \
+      mysql --protocol=socket -u{{ zabbix_user }} -p{{ zabbix_password }} {{ zabbix_db }}
     when: zbx_check.query_result is not defined or zbx_check.query_result|length == 0
 
   # =========================
