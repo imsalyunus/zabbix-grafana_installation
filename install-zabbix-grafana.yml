@@ -182,15 +182,19 @@
   # =========================
   # GRAFANA
   # =========================
-  - name: Add Grafana key
+  - name: Download Grafana GPG key
     get_url:
       url: https://apt.grafana.com/gpg.key
-      dest: /etc/apt/trusted.gpg.d/grafana.gpg
+      dest: /tmp/grafana.key
+  
+  - name: Convert GPG key (dearmor)
+    command: gpg --dearmor -o /usr/share/keyrings/grafana.gpg /tmp/grafana.key
 
   - name: Add Grafana repo
     copy:
       dest: /etc/apt/sources.list.d/grafana.list
-      content: "deb https://apt.grafana.com stable main\n"
+      content: |
+        deb [signed-by=/usr/share/keyrings/grafana.gpg] https://apt.grafana.com stable main
 
   - name: Update apt (grafana)
     apt:
