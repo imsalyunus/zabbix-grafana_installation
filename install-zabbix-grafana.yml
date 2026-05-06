@@ -11,6 +11,16 @@
   # =========================
   # BASE SYSTEM
   # =========================
+  - name: Remove old broken Grafana key
+    file:
+      path: /etc/apt/trusted.gpg.d/grafana.gpg
+      state: absent
+
+  - name: Remove old Grafana repo
+    file:
+      path: /etc/apt/sources.list.d/grafana.list
+      state: absent
+    
   - name: Update apt cache
     apt:
       update_cache: yes
