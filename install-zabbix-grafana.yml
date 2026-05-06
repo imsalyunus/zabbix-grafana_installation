@@ -140,21 +140,18 @@
   # =========================
   # SAFE SCHEMA INIT
   # =========================
-  - name: Check if Zabbix schema already exists
+  - name: Check tables count
     ansible.mysql.mysql_query:
-      login_user: "{{ zabbix_user }}"
-      login_password: "{{ zabbix_password }}"
       login_unix_socket: /var/run/mysqld/mysqld.sock
-      query: "SHOW TABLES LIKE 'users';"
-      db: "{{ zabbix_db }}"
-    register: zbx_check
-    ignore_errors: yes
-
-  - name: Import Zabbix schema (ONLY IF EMPTY DB)
+      login_db: "{{ zabbix_db }}"
+      query: "SHOW TABLES;"
+    register: zbx_tables
+  
+  - name: Import schema if empty
     shell: |
       zcat /usr/share/zabbix-sql-scripts/mysql/server.sql.gz | \
       mysql --protocol=socket -u{{ zabbix_user }} -p{{ zabbix_password }} {{ zabbix_db }}
-    when: zbx_check.query_result is not defined or zbx_check.query_result|length == 0
+    when: zbx_tables.query_result | length == 0
 
   # =========================
   # ZABBIX CONFIG
