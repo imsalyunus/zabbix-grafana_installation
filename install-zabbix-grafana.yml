@@ -51,6 +51,7 @@
       encoding: utf8mb4
       collation: utf8mb4_bin
       state: present
+      login_unix_socket: /var/run/mysqld/mysqld.sock
 
   - name: Create Zabbix user
     ansible.mysql.mysql_user:
@@ -59,6 +60,7 @@
       priv: "{{ zabbix_db }}.*:ALL"
       host: localhost
       state: present
+      login_unix_socket: /var/run/mysqld/mysqld.sock
 
   - name: Enable function creators (fix 1419 error)
     lineinfile:
@@ -114,10 +116,9 @@
     ansible.mysql.mysql_query:
       login_user: "{{ zabbix_user }}"
       login_password: "{{ zabbix_password }}"
+      login_unix_socket: /var/run/mysqld/mysqld.sock
       query: "SHOW TABLES LIKE 'users';"
       db: "{{ zabbix_db }}"
-    register: zbx_check
-    ignore_errors: yes
 
   - name: Import Zabbix schema (ONLY IF EMPTY DB)
     shell: |
